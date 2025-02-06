@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sleep Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f4f4f4;
+            padding: 20px;
+        }
+        .container {
+            max-width: 400px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 16px;
+        }
+        button.stop {
+            background-color: #dc3545;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+        li {
+            background: #fff3cd;
+            margin: 5px 0;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.4);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 10px;
+            text-align: left;
+            position: relative;
+        }
+        .close {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        canvas {
+            width: 100% !important;
+            max-width: 400px;
+            margin: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>Sleep Tracker</h2>
+        <label for="sleepGoal">Sleep Goal (Hours): </label>
+        <select id="sleepGoal">
+            <option value="360">6 hrs</option>
+            <option value="420">7 hrs</option>
+            <option value="480" selected>8 hrs</option>
+            <option value="540">9 hrs</option>
+        </select>
+        
+        <p id="status">Press "Start" when you go to sleep.</p>
+        <button id="startButton" onclick="startSleep()">Start Sleep</button>
+        <button id="stopButton" class="stop" onclick="stopSleep()" disabled>Stop Sleep</button>
+        
+        <h3>Sleep History</h3>
+        <ul id="sleepHistory"></ul>
+        <button onclick="openModal()">View Sleep Data</button>
+    </div>
+
+    <!-- Sleep Data Modal -->
+    <div id="sleepModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h3>Sleep Data</h3>
+            <canvas id="sleepChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        let sleepStart = null;
+        const API_URL = "https://your-api.com/sleep"; // Replace with your actual API URL
+        let sleepData = [];
+
+        async function fetchSleepData() {
+            try {
+                let response = await fetch(API_URL);
+                sleepData = await response.json();
+                renderSleepHistory(sleepData);
+            } catch (error) {
+                console.error("Error fetching sleep data:", error);
+            }
+        }
+
+        function startSleep() {
+            sleepStart = new Date();
+            document.getElementById('status').innerText = "Sleeping... Press stop when you wake up.";
+            document.getElementById('startButton').disabled = true;
+            document.getElementById('stopButton').disabled = false;
+        }
+
+        async function stopSleep() {
+            if (!sleepStart) return;
+
+            let sleepEnd = new Date();
+            let duration = Math.round((sleepEnd - sleepStart) / 60000); // Calculate in minutes
+            let sleepGoal = parseInt(document.getElementById("sleepGoal").value) / 60; // Convert goal from minutes to hours
+            
+            let sleepRecord = {
+                startTime: sleepStart.toISOString(),
+                endTime: sleepEnd.toISOString(),
+                duration: duration,
+                goal: sleepGoal
+            };
+
+            try {
+                await fetch(API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(sleepRecord)
+                });
+            } catch (error) {
+                console.error("Error saving sleep data:", error);
+            }
+
+            document.getElementById('status').innerText = `You slept for ${duration} minutes.`;
+            document.getElementById('startButton').disabled = false;
+            document.getElementById('stopButton').disabled = true;
+            sleepStart = null;
+
+            fetchSleepData();
+        }
+
+        function renderSleepHistory(data) {
+            let historyList = document.getElementById('sleepHistory');
+            historyList.innerHTML = "";
+            data.forEach(entry => {
+                let listItem = document.createElement("li");
+                listItem.innerText = `Slept for ${entry.duration} minutes (Goal: ${entry.goal * 60} minutes) on ${new Date(entry.startTime).toLocaleDateString()}`;
+                historyList.appendChild(listItem);
+            });
+        }
+
+        function openModal() {
+            renderSleepChart();
+            document.getElementById("sleepModal").style.display = "block";
+        }
+
+        function closeModal() {
+            document.getElementById("sleepModal").style.display = "none";
+        }
+
+        function renderSleepChart() {
+            let ctx = document.getElementById("sleepChart").getContext("2d");
+            let labels = sleepData.map(entry => new Date(entry.startTime).toLocaleDateString());
+            let actualSleep = sleepData.map(entry => entry.duration); // in minutes
+            let sleepGoal = parseInt(document.getElementById("sleepGoal").value); // sleep goal in minutes
+
+            // Standard sleep goal line
+            let goalLine = new Array(sleepData.length).fill(sleepGoal);
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Sleep Goal (minutes)',
+                            data: goalLine,
+                            borderColor: 'red',
+                            fill: false,
+                            borderWidth: 2,
+                            borderDash: [5, 5],  // Dashed line
+                        },
+                        {
+                            label: 'Actual Sleep (minutes)',
+                            data: actualSleep,
+                            borderColor: 'blue',
+                            fill: false,
+                            borderWidth: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: { title: { display: true, text: 'Date' } },
+                        y: { title: { display: true, text: 'Minutes' } }
+                    }
+                }
+            });
+        }
+
+        fetchSleepData();
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medication & Vaccine Calendar</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: white;
+            padding: 15px;
+            margin: 0;
+        }
+        .calendar-container {
+            width: 100%;
+            max-width: 400px;
+            margin: auto;
+            padding: 13px;
+            background: #f9f9f9;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .calendar {
+            width: 100%;
+            table-layout: fixed;
+            border-collapse: collapse;
+        }
+        .calendar th, .calendar td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+            width: 14.2%;
+            height: 40px;
+            position: relative;
+            cursor: pointer;
+        }
+        .calendar th {
+            background-color: #007bff;
+            color: white;
+            font-size: 14px;
+            height: 40px;
+        }
+        .calendar td {
+            font-size: 16px;
+            vertical-align: bottom;
+        }
+        .dot-container {
+            position: absolute;
+            top: 4px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 4px;
+        }
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .legend {
+            margin-top: 15px;
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 14px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .vaccine-highlight {
+            background-color: #ADD8E6 !important;
+        }
+        .calendar-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .calendar-controls select {
+            padding: 5px 10px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        #details {
+            margin-top: 15px;
+            padding: 10px;
+            background: #fff3cd;
+            border: 1px solid #ffeeba;
+            border-radius: 5px;
+            display: none;
+            max-width: 400px;
+            margin: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Medication & Vaccine Calendar</h2>
+
+    <div class="calendar-controls">
+        <select id="monthSelect" onchange="updateCalendar()"></select>
+        <select id="yearSelect" onchange="updateCalendar()"></select>
+    </div>
+
+    <div class="calendar-container">
+        <table class="calendar" id="calendar"></table>
+    </div>
+    
+    <div id="details"></div>
+
+    <script>
+        let currentMonth = new Date().getMonth();
+        let currentYear = new Date().getFullYear();
+
+        document.addEventListener('DOMContentLoaded', function() {
+            setupControls();
+            generateCalendar();
+            loadMedicationAndVaccineDates();
+        });
+
+        function setupControls() {
+            const monthSelect = document.getElementById('monthSelect');
+            const yearSelect = document.getElementById('yearSelect');
+
+            const months = [
+                "January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December"
+            ];
+            
+            months.forEach((month, index) => {
+                let option = document.createElement('option');
+                option.value = index;
+                option.textContent = month;
+                monthSelect.appendChild(option);
+            });
+
+            for (let i = currentYear - 10; i <= currentYear + 10; i++) {
+                let option = document.createElement('option');
+                option.value = i;
+                option.textContent = i;
+                yearSelect.appendChild(option);
+            }
+
+            monthSelect.value = currentMonth;
+            yearSelect.value = currentYear;
+        }
+
+        function updateCalendar() {
+            currentMonth = parseInt(document.getElementById('monthSelect').value);
+            currentYear = parseInt(document.getElementById('yearSelect').value);
+            generateCalendar();
+            loadMedicationAndVaccineDates();
+        }
+
+        function generateCalendar() {
+            const calendar = document.getElementById('calendar');
+            let firstDay = new Date(currentYear, currentMonth, 1).getDay();
+            let lastDate = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+            let html = '<tr><th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th></tr>';
+            let date = 1;
+
+            for (let i = 0; i < 6; i++) {
+                html += '<tr>';
+                for (let j = 0; j < 7; j++) {
+                    if (i === 0 && j < firstDay) {
+                        html += '<td></td>';
+                    } else if (date > lastDate) {
+                        html += '<td></td>';
+                    } else {
+                        html += `<td data-date="${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}-${date.toString().padStart(2, '0')}" onclick="showDetails(this)">
+                                    <div class="dot-container"></div>
+                                    ${date}
+                                 </td>`;
+                        date++;
+                    }
+                }
+                html += '</tr>';
+                if (date > lastDate) break;
+            }
+
+            calendar.innerHTML = html;
+        }
+
+        function showDetails(cell) {
+            let dateKey = cell.getAttribute('data-date');
+            let medications = JSON.parse(localStorage.getItem('medications')) || [];
+            let vaccines = JSON.parse(localStorage.getItem('vaccinationReminders')) || [];
+            let detailsDiv = document.getElementById('details');
+            
+            let details = `<h3>Details for ${dateKey}</h3>`;
+            let items = [];
+
+            medications.forEach(med => {
+                let start = new Date(med.startDate);
+                let end = new Date(med.endDate);
+                while (start <= end) {
+                    if (start.toISOString().split('T')[0] === dateKey) {
+                        items.push(`<li><strong>${med.medication}</strong></li>`);
+                        break;
+                    }
+                    start.setDate(start.getDate() + 1);
+                }
+            });
+
+            vaccines.forEach(vac => {
+                let [day, month, year] = vac.date.split('/');
+                let formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                if (formattedDate === dateKey) {
+                    items.push(`<li><strong>${vac.vaccineName} (Vaccine)</strong></li>`);
+                }
+            });
+
+            details += items.length ? `<ul>${items.join('')}</ul>` : `<p>No medications or vaccines scheduled.</p>`;
+            detailsDiv.innerHTML = details;
+            detailsDiv.style.display = 'block';
+        }
+    </script>
+
+</body>
+</html>
