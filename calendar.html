@@ -98,6 +98,9 @@
             max-width: 400px;
             margin: auto;
         }
+        .today {
+            background-color: #d3ffd3 !important;
+        }
     </style>
 </head>
 <body>
@@ -164,6 +167,10 @@
             let firstDay = new Date(currentYear, currentMonth, 1).getDay();
             let lastDate = new Date(currentYear, currentMonth + 1, 0).getDate();
 
+            let medications = JSON.parse(localStorage.getItem('medications')) || [];
+            let vaccines = JSON.parse(localStorage.getItem('vaccinationReminders')) || [];
+            let today = new Date().toISOString().split('T')[0];
+
             let html = '<tr><th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th></tr>';
             let date = 1;
 
@@ -175,8 +182,34 @@
                     } else if (date > lastDate) {
                         html += '<td></td>';
                     } else {
-                        html += `<td data-date="${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}-${date.toString().padStart(2, '0')}" onclick="showDetails(this)">
-                                    <div class="dot-container"></div>
+                        let dateKey = `${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}-${date.toString().padStart(2, '0')}`;
+                        let hasMedication = medications.some(med => {
+                            let start = new Date(med.startDate);
+                            let end = new Date(med.endDate);
+                            while (start <= end) {
+                                if (start.toISOString().split('T')[0] === dateKey) {
+                                    return true;
+                                }
+                                start.setDate(start.getDate() + 1);
+                            }
+                            return false;
+                        });
+
+                        let hasVaccine = vaccines.some(vac => {
+                            let [day, month, year] = vac.date.split('/');
+                            let formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                            return formattedDate === dateKey;
+                        });
+
+                        let dotHtml = '';
+                        if (hasMedication || hasVaccine) {
+                            dotHtml = `<div class="dot" style="background-color: ${hasMedication ? 'red' : 'blue'};"></div>`;
+                        }
+
+                        let todayClass = dateKey === today ? 'today' : '';
+
+                        html += `<td class="${todayClass}" data-date="${dateKey}" onclick="showDetails(this)">
+                                    <div class="dot-container">${dotHtml}</div>
                                     ${date}
                                  </td>`;
                         date++;
@@ -199,21 +232,13 @@
             let items = [];
 
             medications.forEach(med => {
-                let start = new Date(med.startDate);
-                let end = new Date(med.endDate);
-                while (start <= end) {
-                    if (start.toISOString().split('T')[0] === dateKey) {
-                        items.push(`<li><strong>${med.medication}</strong></li>`);
-                        break;
-                    }
-                    start.setDate(start.getDate() + 1);
+                if (med.startDate <= dateKey && med.endDate >= dateKey) {
+                    items.push(`<li><strong>${med.medication}</strong></li>`);
                 }
             });
 
             vaccines.forEach(vac => {
-                let [day, month, year] = vac.date.split('/');
-                let formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-                if (formattedDate === dateKey) {
+                if (vac.date === dateKey) {
                     items.push(`<li><strong>${vac.vaccineName} (Vaccine)</strong></li>`);
                 }
             });
